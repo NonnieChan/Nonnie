@@ -14,10 +14,11 @@ const {
 	joinVoiceChannel,
 	createAudioPlayer,
 	createAudioResource,
-	AudioPlayerStatus
+	AudioPlayerStatus,
+	StreamType
 } = require('@discordjs/voice');
 
-const play = require('play-dl');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,7 +42,7 @@ const client = new Client({
 
 const player = createAudioPlayer();
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
 
 	console.log(`${client.user.tag} is online!`);
 
@@ -56,7 +57,6 @@ client.once('clientReady', async () => {
 	});
 
 	const commands = [
-
 		new SlashCommandBuilder()
 			.setName('play')
 			.setDescription('Play music from YouTube')
@@ -70,14 +70,12 @@ client.once('clientReady', async () => {
 		new SlashCommandBuilder()
 			.setName('stop')
 			.setDescription('Stop music')
-
 	].map(command => command.toJSON());
 
 	const rest = new REST({ version: '10' })
 		.setToken(process.env.TOKEN);
 
 	try {
-
 		console.log('Registering slash commands...');
 
 		await rest.put(
@@ -86,12 +84,8 @@ client.once('clientReady', async () => {
 		);
 
 		console.log('Slash commands registered!');
-
-	}
-	catch (error) {
-
+	} catch (error) {
 		console.error(error);
-
 	}
 });
 
@@ -99,6 +93,7 @@ client.on('interactionCreate', async interaction => {
 
 	if (!interaction.isChatInputCommand()) return;
 
+	// 🎵 PLAY COMMAND
 	if (interaction.commandName === 'play') {
 
 		const url = interaction.options.getString('url');
@@ -106,49 +101,48 @@ client.on('interactionCreate', async interaction => {
 		const voiceChannel = interaction.member.voice.channel;
 
 		if (!voiceChannel) {
-
-			return interaction.reply(
-				'Join a voice channel first 👀'
-			);
-
+			return interaction.reply('Join a voice channel first 👀');
 		}
 
-		const connection = joinVoiceChannel({
-			channelId: voiceChannel.id,
-			guildId: voiceChannel.guild.id,
-			adapterCreator:
-				voiceChannel.guild.voiceAdapterCreator
-		});
+		try {
 
-		const stream = await play.stream(url);
+			const connection = joinVoiceChannel({
+				channelId: voiceChannel.id,
+				guildId: voiceChannel.guild.id,
+				adapterCreator: voiceChannel.guild.voiceAdapterCreator
+			});
 
-		const resource = createAudioResource(
-			stream.stream,
-			{
-				inputType: stream.type
-			}
-		);
+			// 🔥 ใช้ ytdl-core แทน play-dl
+			const stream = ytdl(url, {
+				filter: 'audioonly',
+				highWaterMark: 1 << 25
+			});
 
-		player.play(resource);
+			const resource = createAudioResource(stream, {
+				inputType: StreamType.Arbitrary
+			});
 
-		connection.subscribe(player);
+			player.play(resource);
+			connection.subscribe(player);
 
-		player.on(AudioPlayerStatus.Idle, () => {
+			player.once(AudioPlayerStatus.Idle, () => {
+				connection.destroy();
+			});
 
-			connection.destroy();
+			await interaction.reply('Now playing 🎵');
 
-		});
-
-		await interaction.reply('Now playing 🎵');
-
+		} catch (err) {
+			console.error('Music error:', err);
+			await interaction.reply('❌ Failed to play this video (YouTube blocked or invalid URL)');
+		}
 	}
 
+	// 🛑 STOP COMMAND
 	if (interaction.commandName === 'stop') {
 
 		player.stop();
 
 		await interaction.reply('Music stopped 🛑');
-
 	}
 });
 
