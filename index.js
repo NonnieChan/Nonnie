@@ -18,7 +18,7 @@ const {
 	StreamType
 } = require('@discordjs/voice');
 
-const ytdl = require('@distube/ytdl-core');
+const ytdl = require('ytdl-core');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
