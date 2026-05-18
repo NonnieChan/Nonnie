@@ -1,23 +1,6 @@
 const express = require('express');
 const path = require('path');
-
-const {
-	Client,
-	GatewayIntentBits,
-	ActivityType,
-	SlashCommandBuilder,
-	REST,
-	Routes
-} = require('discord.js');
-
-const {
-	joinVoiceChannel,
-	createAudioPlayer,
-	createAudioResource,
-	AudioPlayerStatus
-} = require('@discordjs/voice');
-
-const play = require('play-dl');
+const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,16 +16,10 @@ app.listen(PORT, () => {
 });
 
 const client = new Client({
-	intents: [
-		GatewayIntentBits.Guilds,
-		GatewayIntentBits.GuildVoiceStates
-	]
+	intents: [GatewayIntentBits.Guilds]
 });
 
-const player = createAudioPlayer();
-
-client.once('ready', async () => {
-
+client.once('ready', () => {
 	console.log(`${client.user.tag} is online!`);
 
 	client.user.setPresence({
@@ -54,102 +31,6 @@ client.once('ready', async () => {
 		],
 		status: 'idle'
 	});
-
-	const commands = [
-
-		new SlashCommandBuilder()
-			.setName('play')
-			.setDescription('Play music from YouTube')
-			.addStringOption(option =>
-				option
-					.setName('url')
-					.setDescription('YouTube URL')
-					.setRequired(true)
-			),
-
-		new SlashCommandBuilder()
-			.setName('stop')
-			.setDescription('Stop music')
-
-	].map(command => command.toJSON());
-
-	const rest = new REST({ version: '10' })
-		.setToken(process.env.TOKEN);
-
-	try {
-
-		console.log('Registering slash commands...');
-
-		await rest.put(
-			Routes.applicationCommands(client.user.id),
-			{ body: commands }
-		);
-
-		console.log('Slash commands registered!');
-
-	}
-	catch (error) {
-
-		console.error(error);
-
-	}
-});
-
-client.on('interactionCreate', async interaction => {
-
-	if (!interaction.isChatInputCommand()) return;
-
-	if (interaction.commandName === 'play') {
-
-		const url = interaction.options.getString('url');
-
-		const voiceChannel = interaction.member.voice.channel;
-
-		if (!voiceChannel) {
-
-			return interaction.reply(
-				'Join a voice channel first 👀'
-			);
-
-		}
-
-		const connection = joinVoiceChannel({
-			channelId: voiceChannel.id,
-			guildId: voiceChannel.guild.id,
-			adapterCreator:
-				voiceChannel.guild.voiceAdapterCreator
-		});
-
-		const stream = await play.stream(url);
-
-		const resource = createAudioResource(
-			stream.stream,
-			{
-				inputType: stream.type
-			}
-		);
-
-		player.play(resource);
-
-		connection.subscribe(player);
-
-		player.on(AudioPlayerStatus.Idle, () => {
-
-			connection.destroy();
-
-		});
-
-		await interaction.reply('Now playing 🎵');
-
-	}
-
-	if (interaction.commandName === 'stop') {
-
-		player.stop();
-
-		await interaction.reply('Music stopped 🛑');
-
-	}
 });
 
 client.login(process.env.TOKEN);
