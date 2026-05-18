@@ -70,7 +70,7 @@ client.once('ready', async () => {
 		new SlashCommandBuilder()
 			.setName('stop')
 			.setDescription('Stop music')
-	].map(command => command.toJSON());
+	].map(cmd => cmd.toJSON());
 
 	const rest = new REST({ version: '10' })
 		.setToken(process.env.TOKEN);
@@ -93,11 +93,10 @@ client.on('interactionCreate', async interaction => {
 
 	if (!interaction.isChatInputCommand()) return;
 
-	// 🎵 PLAY COMMAND
+	// 🎵 PLAY
 	if (interaction.commandName === 'play') {
 
 		const url = interaction.options.getString('url');
-
 		const voiceChannel = interaction.member.voice.channel;
 
 		if (!voiceChannel) {
@@ -112,9 +111,10 @@ client.on('interactionCreate', async interaction => {
 				adapterCreator: voiceChannel.guild.voiceAdapterCreator
 			});
 
-			// 🔥 ใช้ ytdl-core แทน play-dl
+			// 🔥 FIX AUDIO STREAM
 			const stream = ytdl(url, {
 				filter: 'audioonly',
+				quality: 'highestaudio',
 				highWaterMark: 1 << 25
 			});
 
@@ -125,24 +125,28 @@ client.on('interactionCreate', async interaction => {
 			player.play(resource);
 			connection.subscribe(player);
 
+			// 🔥 กันหลุด + auto cleanup
 			player.once(AudioPlayerStatus.Idle, () => {
 				connection.destroy();
 			});
 
-			await interaction.reply('Now playing 🎵');
+			player.on('error', err => {
+				console.log('Player error:', err);
+			});
+
+			await interaction.reply('🎵 Now playing');
 
 		} catch (err) {
-			console.error('Music error:', err);
-			await interaction.reply('❌ Failed to play this video (YouTube blocked or invalid URL)');
+			console.error('Play error:', err);
+			await interaction.reply('❌ เล่นเพลงไม่ได้ (ลิงก์หรือ YouTube block)');
 		}
 	}
 
-	// 🛑 STOP COMMAND
+	// 🛑 STOP
 	if (interaction.commandName === 'stop') {
 
 		player.stop();
-
-		await interaction.reply('Music stopped 🛑');
+		await interaction.reply('🛑 Stopped');
 	}
 });
 
